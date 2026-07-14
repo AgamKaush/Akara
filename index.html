@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Printing Tracker</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            padding: 20px; 
+            max-width: 850px; 
+            margin: auto; 
+            background-color: #4A90E2; 
+        }
+        .card { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
+            margin-bottom: 20px;
+        }
+        .grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px; 
+        }
+        .input-group { 
+            display: flex; 
+            flex-direction: column; 
+        }
+        input, select { 
+            padding: 10px; 
+            margin-top: 5px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #28a745;
+            box-shadow: 0 0 5px rgba(40, 167, 69, 0.3);
+        }
+        .readonly { 
+            background-color: #e9ecef; 
+            font-weight: bold; 
+            color: #333; 
+        }
+        h2 { 
+            margin-top: 0; 
+            color: #333; 
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+        
+        #addBtn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        #addBtn:hover {
+            background-color: #218838;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        .remove-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .remove-btn:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Add Item</h2>
+        <div class="grid">
+            <div class="input-group">
+                <label>3D Model Name</label>
+                <input type="text" id="itemName" placeholder="e.g., Custom Keychain">
+            </div>
+            <div class="input-group">
+                <label>Filament Type</label>
+                <select id="material">
+                    <option value="0.85">PLA (₹0.85 / gram)</option>
+                    <option value="1.20">PETG (₹1.20 / gram)</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Filament Used (Grams)</label>
+                <input type="number" id="filamentUsed" placeholder="e.g., 32">
+            </div>
+            <div class="input-group">
+                <label>Selling Price (₹)</label>
+                <input type="number" id="sellingPrice" placeholder="e.g., 199">
+            </div>
+            <div class="input-group">
+                <label>Est. Print Time (Hours)</label>
+                <input type="number" id="printTime" class="readonly" readonly>
+            </div>
+            <div class="input-group">
+                <label>Electricity Cost (₹)</label>
+                <input type="number" id="electricityCost" class="readonly" readonly>
+            </div>
+            <div class="input-group">
+                <label>Total Cost Price (₹)</label>
+                <input type="number" id="costPrice" class="readonly" readonly>
+            </div>
+            <div class="input-group">
+                <label>Profit Margin (₹)</label>
+                <input type="number" id="margin" class="readonly" readonly>
+            </div>
+        </div>
+        <button id="addBtn">Add to Catalog</button>
+    </div>
+
+    <div class="card">
+        <h2>Catalog List</h2>
+        <table id="catalogTable">
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Material</th>
+                    <th>Used (g)</th>
+                    <th>Time (hrs)</th>
+                    <th>Cost (₹)</th>
+                    <th>Price (₹)</th>
+                    <th>Margin (₹)</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="catalogBody">
+                <!-- Javascript will inject rows here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- IMPORTANT: type="module" allows us to import Firebase -->
+    <script type="module">
+        // 1. Import Firebase Core and Firestore (matching your v12.16.0 version)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+
+        // 2. Your exact Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyC0un0wxYsxXx-TQ6Deirvps-JKluDrQPc",
+            authDomain: "d-tracker-8ae31.firebaseapp.com",
+            projectId: "d-tracker-8ae31",
+            storageBucket: "d-tracker-8ae31.firebasestorage.app",
+            messagingSenderId: "379296648104",
+            appId: "1:379296648104:web:dad193e3591281ac59ab9d"
+        };
+
+        // 3. Initialize Firebase and Firestore Database
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- Math Logic ---
+        function calculateFinancials() {
+            let materialCostPerGram = parseFloat(document.getElementById('material').value) || 0;
+            let filamentGrams = parseFloat(document.getElementById('filamentUsed').value) || 0;
+            let sellingPrice = parseFloat(document.getElementById('sellingPrice').value) || 0;
+
+            let printTimeHours = filamentGrams / 8;
+            let hourlyElectricityRate = 1.05; 
+            let totalElectricityCost = printTimeHours * hourlyElectricityRate;
+            let totalFilamentCost = materialCostPerGram * filamentGrams;
+            let totalCostPrice = totalFilamentCost + totalElectricityCost;
+            let margin = sellingPrice - totalCostPrice;
+
+            document.getElementById('printTime').value = printTimeHours.toFixed(2);
+            document.getElementById('electricityCost').value = totalElectricityCost.toFixed(2);
+            document.getElementById('costPrice').value = totalCostPrice.toFixed(2);
+            
+            if (sellingPrice > 0) {
+                document.getElementById('margin').value = margin.toFixed(2);
+            } else {
+                document.getElementById('margin').value = "0.00";
+            }
+        }
+
+        const inputs = document.querySelectorAll('input, select');
+        inputs.forEach(input => {
+            input.addEventListener('input', calculateFinancials);
+        });
+
+        // --- Render Row Function (Creates HTML and adds Delete Logic) ---
+        function renderRow(docId, data) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${data.name}</td>
+                <td>${data.material}</td>
+                <td>${data.used}</td>
+                <td>${data.time}</td>
+                <td>₹${data.cost}</td>
+                <td>₹${data.price}</td>
+                <td>₹${data.margin}</td>
+                <td><button class="remove-btn">Remove</button></td>
+            `;
+
+            // Make the remove button delete from Firebase, then remove from screen
+            tr.querySelector('.remove-btn').addEventListener('click', async (e) => {
+                const btn = e.target;
+                btn.innerText = "..."; // Show loading state
+                try {
+                    await deleteDoc(doc(db, "catalog", docId)); // Delete from database
+                    tr.remove(); // Delete from screen
+                } catch (error) {
+                    console.error("Error removing document: ", error);
+                    alert("Failed to delete from database.");
+                    btn.innerText = "Remove";
+                }
+            });
+
+            document.getElementById('catalogBody').appendChild(tr);
+        }
+
+        // --- Load Existing Data on Startup ---
+        async function loadCatalog() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "catalog"));
+                querySnapshot.forEach((document) => {
+                    renderRow(document.id, document.data());
+                });
+            } catch (error) {
+                console.error("Error loading data: ", error);
+            }
+        }
+        
+        // Call the load function as soon as the script runs
+        loadCatalog();
+
+        // --- Add New Item to Database ---
+        document.getElementById('addBtn').addEventListener('click', async function() {
+            const btn = document.getElementById('addBtn');
+            let name = document.getElementById('itemName').value;
+            let materialDropdown = document.getElementById('material');
+            let materialText = materialDropdown.options[materialDropdown.selectedIndex].text.split(' ')[0]; 
+            let used = document.getElementById('filamentUsed').value;
+            let time = document.getElementById('printTime').value;
+            let cost = document.getElementById('costPrice').value;
+            let price = document.getElementById('sellingPrice').value;
+            let margin = document.getElementById('margin').value;
+
+            if (!name || !used || !price) {
+                alert("Please fill out the Model Name, Filament Used, and Selling Price!");
+                return;
+            }
+
+            btn.innerText = "Saving to Cloud...";
+
+            const newItemData = {
+                name: name,
+                material: materialText,
+                used: used,
+                time: time,
+                cost: cost,
+                price: price,
+                margin: margin,
+                timestamp: new Date()
+            };
+
+            try {
+                // Save to Firestore Database
+                const docRef = await addDoc(collection(db, "catalog"), newItemData);
+                
+                // Immediately display it on screen using the new database ID
+                renderRow(docRef.id, newItemData);
+
+                // Clear fields
+                document.getElementById('itemName').value = '';
+                document.getElementById('filamentUsed').value = '';
+                document.getElementById('sellingPrice').value = '';
+                calculateFinancials(); 
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                alert("Failed to save to database. Check console for details.");
+            }
+
+            btn.innerText = "Add to Catalog";
+        });
+    </script>
+</body>
+</html>
