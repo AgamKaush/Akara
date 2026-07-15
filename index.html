@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Printing Tracker</title>
     
-    <!-- This tells the browser where to find the 3D rendering engine (Three.js) -->
     <script type="importmap">
         {
           "imports": {
@@ -36,16 +35,18 @@
         .remove-btn { background-color: #dc3545; }
         .remove-btn:hover { background-color: #c82333; }
 
-        /* Modal Styles for 3D Viewer Popup */
         #modelModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; }
         #modalContent { width: 80%; height: 80%; margin: 5% auto; background: white; position: relative; border-radius: 8px; overflow: hidden; }
         #closeModal { position: absolute; top: 10px; right: 10px; z-index: 1001; background: #dc3545; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; }
+        
+        /* New styling for the color picker box */
+        #colorPickerContainer { position: absolute; top: 10px; left: 10px; z-index: 1001; background: white; padding: 8px 12px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        
         #viewer3d { width: 100%; height: 100%; background-color: #e9ecef; }
     </style>
 </head>
 <body>
 
-    <!-- Top Card: Input Form with Upload Button -->
     <div class="card">
         <h2>Add Item & STL</h2>
         <div class="grid">
@@ -80,7 +81,6 @@
         <button id="addBtn">Upload & Add to Catalog</button>
     </div>
 
-    <!-- Bottom Card: The Data Table -->
     <div class="card">
         <h2>Catalog List</h2>
         <table id="catalogTable">
@@ -99,25 +99,28 @@
         </table>
     </div>
 
-    <!-- The Popup Box where the 3D viewer renders -->
     <div id="modelModal">
         <div id="modalContent">
+            <!-- New Color Picker added here -->
+            <div id="colorPickerContainer">
+                <label for="modelColor">Filament Color:</label>
+                <input type="color" id="modelColor" value="#007bff">
+            </div>
+            
             <button id="closeModal">Close Viewer</button>
             <div id="viewer3d"></div>
         </div>
     </div>
 
     <script type="module">
-        // Import Firebase Firestore Modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
         
-        // Import Three.js Render Modules
         import * as THREE from 'three';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // Your exact Firebase configuration
+        // --- PASTE YOUR FIREBASE CONFIG HERE ---
         const firebaseConfig = {
             apiKey: "AIzaSyC0un0wxYsxXx-TQ6Deirvps-JKluDrQPc",
             authDomain: "d-tracker-8ae31.firebaseapp.com",
@@ -130,11 +133,10 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Your exact Cloudinary configurations
+        // --- CLOUDINARY CONFIG (ADD YOURS HERE) ---
         const CLOUDINARY_CLOUD_NAME = "rdcealjq"; 
         const CLOUDINARY_UPLOAD_PRESET = "3d tracker";
 
-        // --- Live Mathematical Calculation ---
         function calculateFinancials() {
             let materialCost = parseFloat(document.getElementById('material').value) || 0;
             let grams = parseFloat(document.getElementById('filamentUsed').value) || 0;
@@ -144,7 +146,6 @@
         }
         document.querySelectorAll('input, select').forEach(input => input.addEventListener('input', calculateFinancials));
 
-        // --- Render Row Function ---
         function renderRow(docId, data) {
             const tr = document.createElement('tr');
             let stlButtonHtml = data.stlUrl ? `<button class="btn-small view-btn" data-url="${data.stlUrl}">View 3D</button>` : 'No File';
@@ -158,7 +159,6 @@
                 <td><button class="btn-small remove-btn">Remove</button></td>
             `;
 
-            // Row deletion logic (Firestore sync)
             tr.querySelector('.remove-btn').addEventListener('click', async (e) => {
                 e.target.innerText = "...";
                 try {
@@ -167,14 +167,12 @@
                 } catch (error) { console.error(error); }
             });
 
-            // Button trigger to open interactive model viewer
             const viewBtn = tr.querySelector('.view-btn');
             if(viewBtn) viewBtn.addEventListener('click', () => open3DViewer(viewBtn.getAttribute('data-url')));
 
             document.getElementById('catalogBody').appendChild(tr);
         }
 
-        // --- Fetch Database Catalog items on tab refresh ---
         async function loadCatalog() {
             try {
                 const querySnapshot = await getDocs(collection(db, "catalog"));
@@ -183,7 +181,6 @@
         }
         loadCatalog();
 
-        // --- Cloudinary Upload & Firestore Save Sequence ---
         document.getElementById('addBtn').addEventListener('click', async function() {
             const btn = document.getElementById('addBtn');
             let name = document.getElementById('itemName').value;
@@ -204,14 +201,12 @@
             let fileDownloadUrl = "";
 
             try {
-                // Upload logic via raw network API call to Cloudinary
                 if (fileInput.files.length > 0) {
                     const file = fileInput.files[0];
                     const formData = new FormData();
                     formData.append('file', file);
                     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
-                    // Crucial: endpoint maps directly to target /raw/ bucket for stl strings
                     const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`;
                     
                     const response = await fetch(uploadUrl, { method: 'POST', body: formData });
@@ -224,7 +219,6 @@
                     }
                 }
 
-                // Compile record and sync directly up to the Firebase bucket
                 const newItemData = {
                     name: name, material: materialText, used: used, cost: cost, price: price,
                     stlUrl: fileDownloadUrl, timestamp: new Date()
@@ -233,7 +227,6 @@
                 const docRef = await addDoc(collection(db, "catalog"), newItemData);
                 renderRow(docRef.id, newItemData);
 
-                // Clear input states
                 document.getElementById('itemName').value = '';
                 document.getElementById('filamentUsed').value = '';
                 document.getElementById('sellingPrice').value = '';
@@ -249,7 +242,7 @@
             btn.disabled = false;
         });
 
-        // --- Interactive 3D STL Object Processing (Three.js Engine) ---
+        // --- Interactive 3D Viewer with Color Picker ---
         let currentAnimationId;
         
         function open3DViewer(url) {
@@ -273,10 +266,22 @@
             scene.add(light);
 
             const loader = new STLLoader();
+            const colorPicker = document.getElementById('modelColor');
+
             loader.load(url, function (geometry) {
-                const material = new THREE.MeshPhongMaterial({ color: 0x007bff, specular: 0x111111, shininess: 200 });
+                // Initialize material with the current color picker value
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: colorPicker.value, 
+                    specular: 0x111111, 
+                    shininess: 200 
+                });
                 const mesh = new THREE.Mesh(geometry, material);
                 
+                // Add event listener to update color immediately when you drag the color picker
+                colorPicker.oninput = function() {
+                    material.color.set(this.value);
+                };
+
                 geometry.computeBoundingBox();
                 const center = new THREE.Vector3();
                 geometry.boundingBox.getCenter(center);
@@ -297,6 +302,9 @@
         document.getElementById('closeModal').addEventListener('click', () => {
             document.getElementById('modelModal').style.display = 'none';
             if (currentAnimationId) cancelAnimationFrame(currentAnimationId);
+            
+            // Reset color picker to default blue when closed
+            document.getElementById('modelColor').value = '#007bff';
         });
     </script>
 </body>
